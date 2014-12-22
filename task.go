@@ -2,70 +2,131 @@ package executor
 
 import (
 	"os/exec"
-	"sync"
+	"sync/atomic"
 )
 
+type Status struct {
+	Running   bool
+	LastStart time.Time
+	LastStop  time.Time
+	LastError time.Time
+	Error     string
+}
+
 type Task struct {
-	mutex   sync.Mutex
-	config  *TaskConfig
-	stop    chan struct{}
-	command *exec.Cmd
+	status   atomic.Value
+	mutex    sync.Mutex
+	onDone   chan struct{}
+	stop     chan struct{}
+	skipWait chan struct{}
 }
 
-func NewTask(config *TaskConfig) *Task {
-	return &Task{sync.Mutex{}, config.Clone(), nil, nil}
+func StartTask(config *Config) *Task {
+	res := &Task{atomic.Value{}, sync.Mutex{}, make(chan struct{}),
+		make(chan struct{}, 1), make(chan struct{})}
+	res.status.Store(Status{})
+	go res.loop(config.Clone())
+	return res
 }
 
-func (t *Task) Start() error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	if stopChan != nil {
-		return ErrAlreadyRunning
+func (t *Task) Done() bool {
+	select {
+	case <-t.onDone:
+		return true
+	default:
+		return false
 	}
-	t.stop = make(chan struct{})
-	t.command = t.config.ToCommand()
-	if err := t.command.Start(); err != nil {
-		t.stop = nil
-		t.command = nil
-		return err
-	}
-	go t.runCommand(t.command, t.stop)
 }
 
-func (t *Task) Stop() error {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	if t.stop == nil {
-		return ErrNotRunning
-	}
-	t.command.Process.Kill()
-	<-t.stop
-	return nil
+func (t *Task) Status() Status {
+	return t.status.Load().(Status)
 }
 
-func (t *Task) Wait() error {
-	if ch := WaitChannel(); ch != nil {
+func (t *Task) Stop() {
+	// Send async stop message
+	select {
+	case t.stop <- struct{}{}:
+	default:
+	}
+	<-t.onDone
+}
+
+func (t *Task) loop(c *Config) {
+	for !t.Done() {
+		if !t.run() {
+			break
+		}
+		if !c.Relaunch {
+			break
+		}
+		if !t.restart() {
+			break
+		}
+	}
+	close(t.onDone)
+}
+
+func (t *Task) reportError(err error) {
+	s := t.Status()
+	s.LastError = time.Now()
+	s.Error = err.Error()
+	t.setStatus(s)
+}
+
+func (t *Task) reportStart() {
+	s := t.Status()
+	s.LastStart = time.Now()
+	t.setStatus(s)
+}
+
+func (t *Task) reportStop() {
+	s := t.Status()
+	s.LastStop = time.Now()
+	t.setStatus(s)
+}
+
+func (t *Task) restart() bool {
+	select {
+	case <-t.stop:
+		return false
+	case <-t.skipWait:
+	case <-time.After(time.Second * t.Interval)
+	}
+	return true
+}
+
+func (t *Task) run(c *Config) bool {
+	// Create the command
+	cmd, err := c.ToCommand()
+	if err != nil {
+		t.reportError(err)
+		return true
+	}
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		t.reportError(err)
+		return true
+	}
+	t.reportStart()
+
+	// Wait for the command to stop
+	ch := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		t.reportStop()
+		close(ch)
+	}()
+	select {
+	case <-ch:
+		return true
+	case <-t.stop:
+		cmd.Process.Kill()
 		<-ch
-		return nil
-	} else {
-		return ErrNotRunning
+		return false
 	}
 }
 
-func (t *Task) WaitChannel() chan struct{} {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	return t.stop
-}
-
-func (t *Task) runCommand(command *exec.Cmd, stop chan struct{}) {
-	command.Wait()
-	close(stop)
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	if t.command == command {
-		t.command = nil
-		t.stop = nil
-	}
+func (t *Task) setStatus(s Status) {
+	t.status.Store(s)
 }
 
