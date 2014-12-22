@@ -9,16 +9,25 @@ import (
 // exit, and error.
 type History struct {
 	Running   bool
+	Done      bool
 	LastStart time.Time
 	LastStop  time.Time
 	LastError time.Time
 	Error     string
 }
 
+// Status records the running status of a task.
+type Status struct {
+	Executing bool
+	Done      bool
+}
+
 // Task stores runtime information for a task.
 type Task struct {
-	history  atomic.Value
-	mutex    sync.Mutex
+	mutex   sync.RWMutex
+	history History
+	status  Status
+
 	onDone   chan struct{}
 	stop     chan struct{}
 	skipWait chan struct{}
@@ -26,40 +35,46 @@ type Task struct {
 
 // StartTask begins the execution loop for a given task.
 func StartTask(config *Config) *Task {
-	res := &Task{atomic.Value{}, sync.Mutex{}, make(chan struct{}),
+	res := &Task{sync.RWMutex{}, History{}, Status{}, make(chan struct{}),
 		make(chan struct{}, 1), make(chan struct{})}
-	res.setHistory(History{})
 	go res.loop(config.Clone())
 	return res
 }
 
-// Done returns true if a task has been stopped or exited and was not set to
-// relaunch.
-func (t *Task) Done() bool {
-	select {
-	case <-t.onDone:
-		return true
-	default:
-		return false
-	}
-}
-
 // History returns the task's history.
 func (t *Task) History() History {
-	return t.history.Load().(History)
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	return t.history
 }
 
-// SkipWait skips the relaunch timeout if it is actively running.
-func (t *Task) SkipWait() {
+// HistoryStatus returns both the task's history and it's status.
+func (t *Task) HistoryStatus() (History, Status) {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	return t.history, t.status
+}
+
+// SkipWait skips current relaunch timeout if applicable.
+// If the task was not relaunching, this returns ErrNotWaiting.
+func (t *Task) SkipWait() error {
 	select {
 	case t.skipWait <- struct{}{}:
+		return nil
 	default:
+		return ErrNotWaiting
 	}
 }
 
-// Stop stops he the task.
-// This method waits for the background process and goroutines to terminate
-// before returning.
+// Status returns the task's status
+func (t *Task) Status() Status {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+	return t.status
+}
+
+// Stop stops the task.
+// This method waits for the background process and Goroutines to terminate.
 func (t *Task) Stop() {
 	// Send async stop message
 	select {
@@ -70,7 +85,7 @@ func (t *Task) Stop() {
 }
 
 func (t *Task) loop(c *Config) {
-	for !t.Done() {
+	for !t.stopped() {
 		if !t.run() {
 			break
 		}
@@ -81,28 +96,31 @@ func (t *Task) loop(c *Config) {
 			break
 		}
 	}
+	t.mutex.Lock()
+	t.Status.Done = true
+	t.mutex.Unlock()
 	close(t.onDone)
 }
 
 func (t *Task) reportError(err error) {
-	s := t.History()
-	s.LastError = time.Now()
-	s.Error = err.Error()
-	t.setHistory(s)
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	t.History.LastError = time.Now()
+	t.History.Error = err.Error()
 }
 
 func (t *Task) reportStart() {
-	s := t.History()
-	s.LastStart = time.Now()
-	s.Running = true
-	t.setHistory(s)
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	t.Status.Running = true
+	t.History.LastStart = time.Now()
 }
 
 func (t *Task) reportStop() {
-	s := t.History()
-	s.LastStop = time.Now()
-	s.Running = false
-	t.setHistory(s)
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+	t.Status.Running = false
+	t.History.LastStop = time.Now()
 }
 
 func (t *Task) restart() bool {
@@ -146,6 +164,11 @@ func (t *Task) run(c *Config) bool {
 	}
 }
 
-func (t *Task) setHistory(h History) {
-	t.history.Store(h)
+func (t *Task) stopped() bool {
+	select {
+	case <-t.stopped:
+		return true
+	default:
+		return false
+	}
 }
