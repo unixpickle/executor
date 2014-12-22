@@ -3,7 +3,6 @@ package executor
 import (
 	"github.com/unixpickle/spinlog"
 	"io"
-	"io/ioutil"
 	"os/exec"
 )
 
@@ -51,6 +50,7 @@ func (c *Config) Clone() *Config {
 	for key, val := range c.Environment {
 		cpy.Environment[key] = val
 	}
+	return cpy
 }
 
 func (c *Config) ToCommand() (*exec.Cmd, error) {

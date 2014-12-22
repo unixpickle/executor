@@ -1,8 +1,8 @@
 package executor
 
 import (
-	"os/exec"
-	"sync/atomic"
+	"sync"
+	"time"
 )
 
 // History records the history of a Task including its last launch,
@@ -82,20 +82,25 @@ func (t *Task) Stop() {
 	<-t.onDone
 }
 
+// Wait waits for the task to stop entirely.
+func (t *Task) Wait() {
+	<-t.onDone
+}
+
 func (t *Task) loop(c *Config) {
 	for !t.stopped() {
-		if !t.run() {
+		if !t.run(c) {
 			break
 		}
 		if !c.Relaunch {
 			break
 		}
-		if !t.restart() {
+		if !t.restart(c) {
 			break
 		}
 	}
 	t.mutex.Lock()
-	t.Status.Done = true
+	t.status.Done = true
 	t.mutex.Unlock()
 	close(t.onDone)
 }
@@ -103,33 +108,33 @@ func (t *Task) loop(c *Config) {
 func (t *Task) reportError(err error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.History.LastError = time.Now()
-	t.History.Error = err.Error()
+	t.history.LastError = time.Now()
+	t.history.Error = err.Error()
 }
 
 func (t *Task) reportStart() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.Status.Running = true
-	t.History.LastStart = time.Now()
+	t.status.Executing = true
+	t.history.LastStart = time.Now()
 }
 
 func (t *Task) reportStop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.Status.Running = false
-	t.History.LastStop = time.Now()
+	t.status.Executing = false
+	t.history.LastStop = time.Now()
 }
 
-func (t *Task) restart() bool {
-	if t.Interval == 0 {
+func (t *Task) restart(c *Config) bool {
+	if c.Interval == 0 {
 		return true
 	}
 	select {
 	case <-t.stop:
 		return false
 	case <-t.skipWait:
-	case <-time.After(time.Second * t.Interval):
+	case <-time.After(time.Second * time.Duration(c.Interval)):
 	}
 	return true
 }
