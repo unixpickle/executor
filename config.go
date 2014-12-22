@@ -29,16 +29,18 @@ func (c *Log) Open() (io.WriteCloser, error) {
 	return spinlog.NewLineLog(c.Config)
 }
 
-type TaskConfig struct {
+type Config struct {
 	Stdout      Log               `json:"stdout"`
 	Stderr      Log               `json:"stderr"`
 	Directory   string            `json:"directory"`
 	Identity    Identity          `json:"identity"`
 	Arguments   []string          `json:"arguments"`
 	Environment map[string]string `json:"environment"`
+	Relaunch    bool              `json:"relaunch"`
+	Interval    int               `json:"interval"`
 }
 
-func (c *TaskConfig) Clone() *TaskConfig {
+func (c *Config) Clone() *Config {
 	x := *c
 	cpy := &x
 	cpy.Arguments = make([]string, len(c.Arguments))
@@ -51,7 +53,7 @@ func (c *TaskConfig) Clone() *TaskConfig {
 	}
 }
 
-func (c *TaskConfig) ToCommand() (*exec.Cmd, error) {
+func (c *Config) ToCommand() (*exec.Cmd, error) {
 	task := exec.Command(c.Arguments[0], c.Arguments[1:]...)
 	for key, value := range c.Environment {
 		task.Env = append(task.Env, key+"="+value)
@@ -73,7 +75,7 @@ func (c *TaskConfig) ToCommand() (*exec.Cmd, error) {
 	return task, nil
 }
 
-type nopWriteCloser struct {
+type nopWriteCloser struct{
 }
 
 func (c nopWriteCloser) Write(p []byte) (int, error) {
