@@ -75,7 +75,7 @@ func (c *Config) ToCommand() (*exec.Cmd, error) {
 	return task, nil
 }
 
-type nopWriteCloser struct{
+type nopWriteCloser struct {
 }
 
 func (c nopWriteCloser) Write(p []byte) (int, error) {
@@ -85,4 +85,3 @@ func (c nopWriteCloser) Write(p []byte) (int, error) {
 func (c nopWriteCloser) Close() error {
 	return nil
 }
-

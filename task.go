@@ -21,10 +21,10 @@ type Task struct {
 	skipWait chan struct{}
 }
 
-func StartTask(config *Config) *Task {
+func StartTask(config *Config, lastStatus Status) *Task {
 	res := &Task{atomic.Value{}, sync.Mutex{}, make(chan struct{}),
 		make(chan struct{}, 1), make(chan struct{})}
-	res.status.Store(Status{})
+	res.status.Store(lastStatus)
 	go res.loop(config.Clone())
 	return res
 }
@@ -35,6 +35,13 @@ func (t *Task) Done() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (t *Task) SkipWait() {
+	select {
+	case t.skipWait <- struct{}{}:
+	default:
 	}
 }
 
@@ -90,7 +97,7 @@ func (t *Task) restart() bool {
 	case <-t.stop:
 		return false
 	case <-t.skipWait:
-	case <-time.After(time.Second * t.Interval)
+	case <-time.After(time.Second * t.Interval):
 	}
 	return true
 }
@@ -129,4 +136,3 @@ func (t *Task) run(c *Config) bool {
 func (t *Task) setStatus(s Status) {
 	t.status.Store(s)
 }
-
