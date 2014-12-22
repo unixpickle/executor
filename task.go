@@ -166,7 +166,7 @@ func (t *Task) run(c *Config) bool {
 
 func (t *Task) stopped() bool {
 	select {
-	case <-t.stopped:
+	case <-t.stop:
 		return true
 	default:
 		return false
