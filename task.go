@@ -55,7 +55,7 @@ func (t *Task) HistoryStatus() (History, Status) {
 	return t.history, t.status
 }
 
-// SkipWait skips current relaunch timeout if applicable.
+// SkipWait skips the current relaunch timeout if applicable.
 // If the task was not relaunching, this returns ErrNotWaiting.
 func (t *Task) SkipWait() error {
 	select {
