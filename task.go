@@ -8,18 +8,16 @@ import (
 // History records the history of a Task including its last launch,
 // exit, and error.
 type History struct {
-	Running   bool
-	Done      bool
-	LastStart time.Time
-	LastStop  time.Time
-	LastError time.Time
-	Error     string
+	LastStart time.Time `json:"last_start"`
+	LastStop  time.Time `json:"last_stop"`
+	LastError time.Time `json:"last_error"`
+	Error     string    `json:"error"`
 }
 
 // Status records the running status of a task.
 type Status struct {
-	Executing bool
-	Done      bool
+	Executing bool `json:"executing"`
+	Done      bool `json:"done"`
 }
 
 // Task stores runtime information for a task.
@@ -124,6 +122,9 @@ func (t *Task) reportStop() {
 }
 
 func (t *Task) restart() bool {
+	if t.Interval == 0 {
+		return true
+	}
 	select {
 	case <-t.stop:
 		return false
