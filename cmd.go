@@ -8,14 +8,31 @@ import (
 
 // Cmd is the full configuration for a command-line executable.
 type Cmd struct {
-	Stdout      Log
-	Stderr      Log
-	Directory   string
-	SetUID      bool
-	UID         int
-	SetGID      bool
-	GID         int
-	Arguments   []string
+	// Stdout stores the standard output configuration.
+	Stdout Log
+
+	// Stderr stores the standard error configuration.
+	Stderr Log
+
+	// Directory is the working directory for the command
+	Directory string
+
+	// SetUID specifies whether or not the UID field should be used.
+	SetUID bool
+
+	// UID is the UID to run the command under.
+	UID int
+
+	// SetGID specifies whether or not the GID field should be used.
+	SetGID bool
+
+	// GID is the GID to run the command under.
+	GID int
+
+	// Arguments is the command-line arguments for the command.
+	Arguments []string
+
+	// Environment is a mapping of environment variables for the command.
 	Environment map[string]string
 }
 
