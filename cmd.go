@@ -8,15 +8,15 @@ import (
 
 // Cmd is the full configuration for a command-line executable.
 type Cmd struct {
-	Stdout      Log               `json:"stdout"`
-	Stderr      Log               `json:"stderr"`
-	Directory   string            `json:"directory"`
-	SetUID      bool              `json:"set_uid"`
-	UID         int               `json:"uid"`
-	SetGID      bool              `json:"set_gid"`
-	GID         int               `json:"gid"`
-	Arguments   []string          `json:"arguments"`
-	Environment map[string]string `json:"environment"`
+	Stdout      Log
+	Stderr      Log
+	Directory   string
+	SetUID      bool
+	UID         int
+	SetGID      bool
+	GID         int
+	Arguments   []string
+	Environment map[string]string
 }
 
 // Command creates a new Cmd with generic settings given a set of command-line
