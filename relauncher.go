@@ -22,7 +22,7 @@ const (
 	STATUS_STOPPED    = iota
 )
 
-// Task stores runtime information for a task.
+// Relauncher stores runtime information for a task.
 type Relauncher struct {
 	mutex   sync.RWMutex
 	history History
@@ -30,7 +30,7 @@ type Relauncher struct {
 
 	interval time.Duration
 	job      Job
-	
+
 	onDone   chan struct{}
 	stop     chan struct{}
 	skipWait chan struct{}
@@ -38,21 +38,21 @@ type Relauncher struct {
 
 // Relaunch starts a job and continually relaunches it on a given interval.
 func Relaunch(job Job, interval time.Duration) *Relauncher {
-	res := &Task{sync.RWMutex{}, History{}, Status{}, interval, job,
+	res := &Relauncher{sync.RWMutex{}, History{}, STATUS_RUNNING, interval, job,
 		make(chan struct{}), make(chan struct{}, 1), make(chan struct{})}
 	go res.loop()
 	return res
 }
 
 // History returns the Relauncher's history.
-func (t *Task) History() History {
+func (t *Relauncher) History() History {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 	return t.history
 }
 
 // HistoryStatus returns both the Relauncher's history and it's status.
-func (t *Task) HistoryStatus() (History, Status) {
+func (t *Relauncher) HistoryStatus() (History, Status) {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 	return t.history, t.status
@@ -60,7 +60,7 @@ func (t *Task) HistoryStatus() (History, Status) {
 
 // SkipWait skips the current relaunch timeout if applicable.
 // If the job was not relaunching, this returns ErrNotWaiting.
-func (t *Task) SkipWait() error {
+func (t *Relauncher) SkipWait() error {
 	select {
 	case t.skipWait <- struct{}{}:
 		return nil
@@ -70,7 +70,7 @@ func (t *Task) SkipWait() error {
 }
 
 // Status returns the task's status
-func (t *Task) Status() Status {
+func (t *Relauncher) Status() Status {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 	return t.status
@@ -78,7 +78,7 @@ func (t *Task) Status() Status {
 
 // Stop stops the relauncher.
 // This method waits for the background job to terminate if necessary.
-func (t *Task) Stop() {
+func (t *Relauncher) Stop() {
 	// Send async stop message
 	select {
 	case t.stop <- struct{}{}:
@@ -88,11 +88,11 @@ func (t *Task) Stop() {
 }
 
 // Wait waits for the task to stop entirely.
-func (t *Task) Wait() {
+func (t *Relauncher) Wait() {
 	<-t.onDone
 }
 
-func (t *Task) loop(j Job) {
+func (t *Relauncher) loop() {
 	for !t.stopped() {
 		if !t.run() {
 			break
@@ -107,28 +107,28 @@ func (t *Task) loop(j Job) {
 	close(t.onDone)
 }
 
-func (t *Task) reportError(err error) {
+func (t *Relauncher) reportError(err error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.history.LastError = time.Now()
 	t.history.Error = err.Error()
 }
 
-func (t *Task) reportStart() {
+func (t *Relauncher) reportStart() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.status = STATUS_RUNNING
 	t.history.LastStart = time.Now()
 }
 
-func (t *Task) reportStop() {
+func (t *Relauncher) reportStop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.status = STATUS_RESTARTING
 	t.history.LastStop = time.Now()
 }
 
-func (t *Task) restart() bool {
+func (t *Relauncher) restart() bool {
 	if t.interval == 0 {
 		return true
 	}
@@ -141,24 +141,35 @@ func (t *Task) restart() bool {
 	return true
 }
 
-func (t *Task) run() bool {
+func (t *Relauncher) run() bool {
+	// Start the job
+	if t.job.Start() != nil {
+		return true
+	}
+	t.reportStart()
+
 	// Wait for the command to stop
 	ch := make(chan struct{})
 	go func() {
-		t.job.Run()
+		if err := t.job.Wait(); err != nil {
+			t.reportError(err)
+		}
+		t.reportStop()
 		close(ch)
 	}()
+
+	// Wait for the stop signal or the done signal
 	select {
 	case <-ch:
 		return true
 	case <-t.stop:
-		cmd.Process.Kill()
+		t.job.Stop()
 		<-ch
 		return false
 	}
 }
 
-func (t *Task) stopped() bool {
+func (t *Relauncher) stopped() bool {
 	select {
 	case <-t.stop:
 		return true

@@ -13,11 +13,12 @@ func main() {
 	}
 	dir, _ := os.Getwd()
 	args := os.Args[1:]
-	cfg := new(executor.Config)
+	cfg := new(executor.Command)
 	cfg.Directory = dir
 	cfg.Arguments = args
 	cfg.Environment = map[string]string{}
-	task := executor.StartTask(cfg)
-	task.Wait()
+	job := cfg.ToJob()
+	job.Start()
+	job.Wait()
 }
 

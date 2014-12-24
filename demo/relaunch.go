@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/unixpickle/executor"
 	"os"
+	"time"
 )
 
 func main() {
@@ -13,15 +14,17 @@ func main() {
 	}
 	dir, _ := os.Getwd()
 	args := os.Args[1:]
-	cfg := new(executor.Config)
+	
+	// Create the command
+	cfg := new(executor.Command)
 	cfg.Directory = dir
 	cfg.Arguments = args
 	cfg.Environment = map[string]string{}
-	cfg.Interval = 1
-	cfg.Relaunch = true
-	task := executor.StartTask(cfg)
-	fmt.Println("hit enter to stop the task...")
+	
+	// Run the relauncher
+	rl := executor.Relaunch(cfg.ToJob(), time.Second)
+	fmt.Println("hit enter to stop the relauncher...")
 	fmt.Scanln()
-	task.Stop()
+	rl.Stop()
 }
 

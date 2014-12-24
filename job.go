@@ -7,11 +7,11 @@ type Job interface {
 	// This is not thread-safe.
 	Start() error
 
-	// Wait waits for the job to finish.
-	// This is not thread-safe.
-	Wait() error
-
 	// Stop stops the job asynchronously if it is running.
 	// This is thread-safe.
 	Stop() error
+
+	// Wait waits for the job to finish.
+	// This is not thread-safe.
+	Wait() error
 }
