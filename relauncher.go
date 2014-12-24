@@ -38,8 +38,8 @@ type Relauncher struct {
 
 // Relaunch starts a job and continually relaunches it on a given interval.
 func Relaunch(job Job, interval time.Duration) *Relauncher {
-	res := &Relauncher{sync.RWMutex{}, History{}, STATUS_RUNNING, interval, job,
-		make(chan struct{}), make(chan struct{}, 1), make(chan struct{})}
+	res := &Relauncher{sync.RWMutex{}, History{}, STATUS_RESTARTING, interval,
+		job, make(chan struct{}), make(chan struct{}, 1), make(chan struct{})}
 	go res.loop()
 	return res
 }

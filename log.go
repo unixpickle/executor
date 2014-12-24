@@ -25,4 +25,3 @@ type nullLog struct{}
 func (x nullLog) Open() (io.WriteCloser, error) {
 	return nopWriteCloser{}, nil
 }
-
