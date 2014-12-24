@@ -16,10 +16,18 @@ type History struct {
 // Status stores the status of a Relauncher.
 type Status int
 
+// These are statuses for a running Relauncher or Service.
 const (
-	STATUS_RUNNING    = iota
+	// STATUS_RUNNING indicates that the Job is currently started and running.
+	STATUS_RUNNING = iota
+
+	// STATUS_RESTARTING indicates that the Job is not running but will be
+	// restarted after a delay.
 	STATUS_RESTARTING = iota
-	STATUS_STOPPED    = iota
+
+	// STATUS_STOPPED indicates that the Job is not running and will not be
+	// automatically started again.
+	STATUS_STOPPED = iota
 )
 
 // Relauncher automatically relaunches a task at a regular interval.

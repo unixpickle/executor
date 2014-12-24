@@ -6,6 +6,7 @@ import (
 	"sync"
 )
 
+// Cmd is the full configuration for a command-line executable.
 type Cmd struct {
 	Stdout      Log               `json:"stdout"`
 	Stderr      Log               `json:"stderr"`
@@ -18,6 +19,8 @@ type Cmd struct {
 	Environment map[string]string `json:"environment"`
 }
 
+// Command creates a new Cmd with generic settings given a set of command-line
+// arguments.
 func Command(arguments ...string) *Cmd {
 	res := new(Cmd)
 	res.Arguments = arguments
@@ -26,6 +29,9 @@ func Command(arguments ...string) *Cmd {
 	return res
 }
 
+// Clone creates a copy of a Cmd.
+// While it does do a completey copy of the Arguments and Environment fields, it
+// cannot copy the Logs.
 func (c *Cmd) Clone() *Cmd {
 	x := *c
 	cpy := &x
@@ -40,6 +46,9 @@ func (c *Cmd) Clone() *Cmd {
 	return cpy
 }
 
+// ToJob creates a Job based on the current configuration in a Cmd.
+// If the receiver is modified after a call to ToJob(), the job will not be
+// modified.
 func (c *Cmd) ToJob() Job {
 	return &cmdJob{sync.Mutex{}, c.Clone(), nil}
 }

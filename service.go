@@ -28,14 +28,14 @@ type Service interface {
 	// By the time this returns, Status() must be STATUS_STOPPED unless an error
 	// is returned.
 	Stop() error
-	
+
 	// Wait waits for the service to stop.
 	// Like Stop(), Wait() will only return once Status() has been set to
 	// STATUS_STOPPED.
 	Wait() error
 }
 
-// RelaunchService creates a service that relaunches a specific Job.
+// RelaunchService creates a service that runs a Relauncher for a specific Job.
 func RelaunchService(job Job, interval time.Duration) Service {
 	res := new(relauncherService)
 	res.job = job
