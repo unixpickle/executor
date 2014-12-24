@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type Command struct {
+type Cmd struct {
 	Stdout      Log               `json:"stdout"`
 	Stderr      Log               `json:"stderr"`
 	Directory   string            `json:"directory"`
@@ -17,7 +17,7 @@ type Command struct {
 	Environment map[string]string `json:"environment"`
 }
 
-func (c *Command) Clone() *Command {
+func (c *Cmd) Clone() *Cmd {
 	x := *c
 	cpy := &x
 	cpy.Arguments = make([]string, len(c.Arguments))
@@ -31,8 +31,8 @@ func (c *Command) Clone() *Command {
 	return cpy
 }
 
-func (c *Command) ToCmd() (*exec.Cmd, error) {
-	task := exec.Command(c.Arguments[0], c.Arguments[1:]...)
+func (c *Cmd) ToExecCmd() (*exec.Cmd, error) {
+	task := exec.Cmd(c.Arguments[0], c.Arguments[1:]...)
 	for key, value := range c.Environment {
 		task.Env = append(task.Env, key+"="+value)
 	}
@@ -53,13 +53,13 @@ func (c *Command) ToCmd() (*exec.Cmd, error) {
 	return task, nil
 }
 
-func (c *Command) ToJob() Job {
+func (c *Cmd) ToJob() Job {
 	return &cmdJob{sync.Mutex{}, c.Clone(), nil}
 }
 
 type cmdJob struct {
 	mutex   sync.Mutex
-	command *Command
+	command *Cmd
 	execCmd *exec.Cmd
 }
 
@@ -73,7 +73,7 @@ func (c *cmdJob) Start() error {
 	}
 
 	// Generate the exec.Cmd
-	cmd, err := c.command.ToCmd()
+	cmd, err := c.command.ToExecCmd()
 	if err != nil {
 		return err
 	}

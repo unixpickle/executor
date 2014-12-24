@@ -7,10 +7,10 @@ import (
 
 // History records a brief history of a Relauncher.
 type History struct {
-	LastStart time.Time `json:"last_start"`
-	LastStop  time.Time `json:"last_stop"`
-	LastError time.Time `json:"last_error"`
-	Error     string    `json:"error"`
+	LastStart time.Time
+	LastStop  time.Time
+	LastError time.Time
+	Error     string
 }
 
 // Status stores the status of a Relauncher.
@@ -87,7 +87,7 @@ func (t *Relauncher) Stop() {
 	<-t.onDone
 }
 
-// Wait waits for the task to stop entirely.
+// Wait waits for the relauncher to be stopped.
 func (t *Relauncher) Wait() {
 	<-t.onDone
 }
