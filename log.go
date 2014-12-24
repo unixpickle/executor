@@ -1,27 +1,16 @@
 package executor
 
-import (
-	"github.com/unixpickle/spinlog"
-	"io"
-)
+import "io"
 
-type Log struct {
-	Config spinlog.LineConfig `json:"config"`
-	Enable bool               `json:"enable"`
-	Lines  bool               `json:"lines"`
+// Log is a general log destination for a command's output.
+type Log interface {
+	Open() (io.WriteCloser, error)
 }
 
-func (c *Log) Open() (io.WriteCloser, error) {
-	if !c.Enable {
-		return nopWriteCloser{}, nil
-	} else if !c.Lines {
-		return spinlog.NewLog(c.Config.Config)
-	}
-	return spinlog.NewLineLog(c.Config)
-}
+// NullLog is a Log which returns no-op writers.
+var NullLog = nullLog{}
 
-type nopWriteCloser struct {
-}
+type nopWriteCloser struct{}
 
 func (c nopWriteCloser) Write(p []byte) (int, error) {
 	return len(p), nil
@@ -30,3 +19,10 @@ func (c nopWriteCloser) Write(p []byte) (int, error) {
 func (c nopWriteCloser) Close() error {
 	return nil
 }
+
+type nullLog struct{}
+
+func (x nullLog) Open() (io.WriteCloser, error) {
+	return nopWriteCloser{}, nil
+}
+

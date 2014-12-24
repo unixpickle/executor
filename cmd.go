@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"io"
 	"os/exec"
 	"sync"
 )
@@ -20,6 +21,8 @@ type Cmd struct {
 func Command(arguments ...string) *Cmd {
 	res := new(Cmd)
 	res.Arguments = arguments
+	res.Stdout = NullLog
+	res.Stderr = NullLog
 	return res
 }
 
@@ -37,7 +40,11 @@ func (c *Cmd) Clone() *Cmd {
 	return cpy
 }
 
-func (c *Cmd) ToExecCmd() (*exec.Cmd, error) {
+func (c *Cmd) ToJob() Job {
+	return &cmdJob{sync.Mutex{}, c.Clone(), nil}
+}
+
+func (c *Cmd) toExecCmd() (*exec.Cmd, error) {
 	task := exec.Command(c.Arguments[0], c.Arguments[1:]...)
 	for key, value := range c.Environment {
 		task.Env = append(task.Env, key+"="+value)
@@ -53,14 +60,11 @@ func (c *Cmd) ToExecCmd() (*exec.Cmd, error) {
 		return nil, err
 	}
 	if task.Stderr, err = c.Stderr.Open(); err != nil {
+		task.Stdout.(io.Closer).Close()
 		return nil, err
 	}
 
 	return task, nil
-}
-
-func (c *Cmd) ToJob() Job {
-	return &cmdJob{sync.Mutex{}, c.Clone(), nil}
 }
 
 type cmdJob struct {
@@ -79,13 +83,15 @@ func (c *cmdJob) Start() error {
 	}
 
 	// Generate the exec.Cmd
-	cmd, err := c.command.ToExecCmd()
+	cmd, err := c.command.toExecCmd()
 	if err != nil {
 		return err
 	}
 
 	// Start the command or return an error
 	if err := cmd.Start(); err != nil {
+		cmd.Stdout.(io.Closer).Close()
+		cmd.Stderr.(io.Closer).Close()
 		return err
 	}
 
@@ -114,6 +120,8 @@ func (c *cmdJob) Wait() error {
 	res := c.execCmd.Wait()
 	c.mutex.Lock()
 
+	c.execCmd.Stdout.(io.Closer).Close()
+	c.execCmd.Stderr.(io.Closer).Close()
 	c.execCmd = nil
 	return res
 }
