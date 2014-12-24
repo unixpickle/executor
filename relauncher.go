@@ -10,7 +10,7 @@ type History struct {
 	LastStart time.Time
 	LastStop  time.Time
 	LastError time.Time
-	Error     string
+	Error     error
 }
 
 // Status stores the status of a Relauncher.
@@ -22,7 +22,7 @@ const (
 	STATUS_STOPPED    = iota
 )
 
-// Relauncher stores runtime information for a task.
+// Relauncher automatically relaunches a task at a regular interval.
 type Relauncher struct {
 	mutex   sync.RWMutex
 	history History
@@ -58,6 +58,11 @@ func (t *Relauncher) HistoryStatus() (History, Status) {
 	return t.history, t.status
 }
 
+// Interval returns the relaunch interval for a given relauncher.
+func (t *Relauncher) Interval() time.Duration {
+	return t.interval
+}
+
 // SkipWait skips the current relaunch timeout if applicable.
 // If the job was not relaunching, this returns ErrNotWaiting.
 func (t *Relauncher) SkipWait() error {
@@ -69,7 +74,7 @@ func (t *Relauncher) SkipWait() error {
 	}
 }
 
-// Status returns the task's status
+// Status returns the Relauncher's status
 func (t *Relauncher) Status() Status {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
@@ -111,7 +116,7 @@ func (t *Relauncher) reportError(err error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	t.history.LastError = time.Now()
-	t.history.Error = err.Error()
+	t.history.Error = err
 }
 
 func (t *Relauncher) reportStart() {

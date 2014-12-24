@@ -17,6 +17,12 @@ type Cmd struct {
 	Environment map[string]string `json:"environment"`
 }
 
+func Command(arguments ...string) *Cmd {
+	res := new(Cmd)
+	res.Arguments = arguments
+	return res
+}
+
 func (c *Cmd) Clone() *Cmd {
 	x := *c
 	cpy := &x
@@ -32,7 +38,7 @@ func (c *Cmd) Clone() *Cmd {
 }
 
 func (c *Cmd) ToExecCmd() (*exec.Cmd, error) {
-	task := exec.Cmd(c.Arguments[0], c.Arguments[1:]...)
+	task := exec.Command(c.Arguments[0], c.Arguments[1:]...)
 	for key, value := range c.Environment {
 		task.Env = append(task.Env, key+"="+value)
 	}

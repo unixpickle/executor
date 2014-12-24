@@ -12,17 +12,13 @@ func main() {
 		fmt.Println("Usage: relaunch <arguments ...>")
 		os.Exit(1)
 	}
-	dir, _ := os.Getwd()
-	args := os.Args[1:]
 	
 	// Create the command
-	cfg := new(executor.Command)
-	cfg.Directory = dir
-	cfg.Arguments = args
-	cfg.Environment = map[string]string{}
+	cmd := executor.Command(os.Args[1:]...)
+	cmd.Directory, _ = os.Getwd()
 	
 	// Run the relauncher
-	rl := executor.Relaunch(cfg.ToJob(), time.Second)
+	rl := executor.Relaunch(cmd.ToJob(), time.Second)
 	fmt.Println("hit enter to stop the relauncher...")
 	fmt.Scanln()
 	rl.Stop()

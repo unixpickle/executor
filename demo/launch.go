@@ -11,13 +11,12 @@ func main() {
 		fmt.Println("Usage: launch <arguments ...>")
 		os.Exit(1)
 	}
-	dir, _ := os.Getwd()
-	args := os.Args[1:]
-	cfg := new(executor.Command)
-	cfg.Directory = dir
-	cfg.Arguments = args
-	cfg.Environment = map[string]string{}
-	job := cfg.ToJob()
+	
+	// Create the command
+	cmd := executor.Command(os.Args[1:]...)
+	cmd.Directory, _ = os.Getwd()
+	
+	job := cmd.ToJob()
 	job.Start()
 	job.Wait()
 }
