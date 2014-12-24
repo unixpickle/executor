@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-// History records the history of a Task including its last launch,
-// exit, and error.
+// History records a brief history of a Relauncher.
 type History struct {
 	LastStart time.Time `json:"last_start"`
 	LastStop  time.Time `json:"last_stop"`
@@ -14,39 +13,45 @@ type History struct {
 	Error     string    `json:"error"`
 }
 
-// Status records the running status of a task.
-type Status struct {
-	Executing bool `json:"executing"`
-	Done      bool `json:"done"`
-}
+// Status stores the status of a Relauncher.
+type Status int
+
+const (
+	STATUS_RUNNING    = iota
+	STATUS_RESTARTING = iota
+	STATUS_STOPPED    = iota
+)
 
 // Task stores runtime information for a task.
-type Task struct {
+type Relauncher struct {
 	mutex   sync.RWMutex
 	history History
 	status  Status
 
+	interval time.Duration
+	job      Job
+	
 	onDone   chan struct{}
 	stop     chan struct{}
 	skipWait chan struct{}
 }
 
-// StartTask begins the execution loop for a given task.
-func StartTask(config *Config) *Task {
-	res := &Task{sync.RWMutex{}, History{}, Status{}, make(chan struct{}),
-		make(chan struct{}, 1), make(chan struct{})}
-	go res.loop(config.Clone())
+// Relaunch starts a job and continually relaunches it on a given interval.
+func Relaunch(job Job, interval time.Duration) *Relauncher {
+	res := &Task{sync.RWMutex{}, History{}, Status{}, interval, job,
+		make(chan struct{}), make(chan struct{}, 1), make(chan struct{})}
+	go res.loop()
 	return res
 }
 
-// History returns the task's history.
+// History returns the Relauncher's history.
 func (t *Task) History() History {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 	return t.history
 }
 
-// HistoryStatus returns both the task's history and it's status.
+// HistoryStatus returns both the Relauncher's history and it's status.
 func (t *Task) HistoryStatus() (History, Status) {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
@@ -54,7 +59,7 @@ func (t *Task) HistoryStatus() (History, Status) {
 }
 
 // SkipWait skips the current relaunch timeout if applicable.
-// If the task was not relaunching, this returns ErrNotWaiting.
+// If the job was not relaunching, this returns ErrNotWaiting.
 func (t *Task) SkipWait() error {
 	select {
 	case t.skipWait <- struct{}{}:
@@ -71,8 +76,8 @@ func (t *Task) Status() Status {
 	return t.status
 }
 
-// Stop stops the task.
-// This method waits for the background process and Goroutines to terminate.
+// Stop stops the relauncher.
+// This method waits for the background job to terminate if necessary.
 func (t *Task) Stop() {
 	// Send async stop message
 	select {
@@ -87,20 +92,17 @@ func (t *Task) Wait() {
 	<-t.onDone
 }
 
-func (t *Task) loop(c *Config) {
+func (t *Task) loop(j Job) {
 	for !t.stopped() {
-		if !t.run(c) {
+		if !t.run() {
 			break
 		}
-		if !c.Relaunch {
-			break
-		}
-		if !t.restart(c) {
+		if !t.restart() {
 			break
 		}
 	}
 	t.mutex.Lock()
-	t.status.Done = true
+	t.status = STATUS_STOPPED
 	t.mutex.Unlock()
 	close(t.onDone)
 }
@@ -115,49 +117,35 @@ func (t *Task) reportError(err error) {
 func (t *Task) reportStart() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.status.Executing = true
+	t.status = STATUS_RUNNING
 	t.history.LastStart = time.Now()
 }
 
 func (t *Task) reportStop() {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	t.status.Executing = false
+	t.status = STATUS_RESTARTING
 	t.history.LastStop = time.Now()
 }
 
-func (t *Task) restart(c *Config) bool {
-	if c.Interval == 0 {
+func (t *Task) restart() bool {
+	if t.interval == 0 {
 		return true
 	}
 	select {
 	case <-t.stop:
 		return false
 	case <-t.skipWait:
-	case <-time.After(time.Second * time.Duration(c.Interval)):
+	case <-time.After(t.interval):
 	}
 	return true
 }
 
-func (t *Task) run(c *Config) bool {
-	// Create the command
-	cmd, err := c.ToCommand()
-	if err != nil {
-		t.reportError(err)
-		return true
-	}
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		t.reportError(err)
-		return true
-	}
-	t.reportStart()
-
+func (t *Task) run() bool {
 	// Wait for the command to stop
 	ch := make(chan struct{})
 	go func() {
-		cmd.Wait()
-		t.reportStop()
+		t.job.Run()
 		close(ch)
 	}()
 	select {
